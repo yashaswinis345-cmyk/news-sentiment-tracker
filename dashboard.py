@@ -58,3 +58,38 @@ else:
     st.subheader("Latest Articles")
     display_df = df[["published", "title", "sentiment_label", "sentiment_score", "link"]]
     st.dataframe(display_df, use_container_width=True)
+
+    st.divider()
+    st.subheader("Sentiment vs. Tesla Stock Price")
+
+    import yfinance as yf
+
+    try:
+        price_data = yf.download("TSLA", period="1mo", interval="1d", progress=False)
+        price_data = price_data.reset_index()
+        price_data["Date"] = pd.to_datetime(price_data["Date"]).dt.date
+
+        df["date_only"] = df["published"].dt.date
+        daily_sentiment = df.groupby("date_only")["sentiment_score"].mean().reset_index()
+        daily_sentiment.columns = ["Date", "avg_sentiment"]
+
+        merged = pd.merge(price_data[["Date", "Close"]], daily_sentiment, on="Date", how="inner")
+
+        if len(merged) >= 2:
+            correlation = merged["Close"].corr(merged["avg_sentiment"])
+            st.metric("Correlation (price vs. sentiment)", f"{correlation:.2f}")
+
+            fig_corr = px.scatter(merged, x="avg_sentiment", y="Close",
+                                   title="Daily Avg Sentiment vs. Closing Price",
+                                   labels={"avg_sentiment": "Average Sentiment Score", "Close": "TSLA Close Price"})
+            st.plotly_chart(fig_corr, use_container_width=True)
+
+            st.caption(
+                "Correlation ranges from -1 to 1. Values near 0 suggest little to no linear relationship "
+                "between daily sentiment and price on the days observed. This is expected over a short "
+                "window and should not be read as predictive."
+            )
+        else:
+            st.info("Not enough overlapping days between news data and price data yet to compute correlation.")
+    except Exception as e:
+        st.warning(f"Could not load price comparison: {e}")
