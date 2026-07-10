@@ -67,6 +67,11 @@ else:
     try:
         price_data = yf.download("TSLA", period="1mo", interval="1d", progress=False)
         price_data = price_data.reset_index()
+
+        # Flatten multi-level columns if present (newer yfinance versions do this)
+        if isinstance(price_data.columns, pd.MultiIndex):
+            price_data.columns = [c[0] for c in price_data.columns]
+
         price_data["Date"] = pd.to_datetime(price_data["Date"]).dt.date
 
         df["date_only"] = df["published"].dt.date
