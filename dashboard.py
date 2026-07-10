@@ -2,16 +2,32 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import plotly.express as px
+import os
 
 st.set_page_config(page_title="Tesla News Sentiment Tracker", layout="wide")
 st.title("Tesla (TSLA) News Sentiment Tracker")
 
-conn = sqlite3.connect("news.db")
-df = pd.read_sql_query("SELECT * FROM articles", conn)
+DB_PATH = "news.db"
+
+if not os.path.exists(DB_PATH):
+    st.info("First-time setup: fetching news and running sentiment analysis. This may take a minute...")
+    from analyze import analyze_and_store
+    analyze_and_store()
+
+conn = sqlite3.connect(DB_PATH)
+try:
+    df = pd.read_sql_query("SELECT * FROM articles", conn)
+except Exception:
+    df = pd.DataFrame()
 conn.close()
 
+if st.button("Refresh news data"):
+    from analyze import analyze_and_store
+    analyze_and_store()
+    st.rerun()
+
 if df.empty:
-    st.warning("No articles found yet. Run analyze.py first.")
+    st.warning("No articles found yet. Click refresh above to fetch news.")
 else:
     df["published"] = pd.to_datetime(df["published"], errors="coerce", utc=True)
     df = df.sort_values("published", ascending=False)
