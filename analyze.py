@@ -1,0 +1,52 @@
+import sqlite3
+from transformers import pipeline
+from fetch_news import fetch_articles
+
+print("Loading FinBERT model...")
+sentiment_pipeline = pipeline("sentiment-analysis", model="ProsusAI/finbert")
+
+def setup_db():
+    conn = sqlite3.connect("news.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT UNIQUE,
+            link TEXT,
+            published TEXT,
+            sentiment_label TEXT,
+            sentiment_score REAL
+        )
+    """)
+    conn.commit()
+    return conn
+
+def analyze_and_store():
+    conn = setup_db()
+    cursor = conn.cursor()
+
+    articles = fetch_articles()
+    print(f"Fetched {len(articles)} articles. Running sentiment analysis...\n")
+
+    new_count = 0
+    for article in articles:
+        result = sentiment_pipeline(article["title"])[0]
+        label = result["label"]
+        score = result["score"]
+
+        try:
+            cursor.execute("""
+                INSERT INTO articles (title, link, published, sentiment_label, sentiment_score)
+                VALUES (?, ?, ?, ?, ?)
+            """, (article["title"], article["link"], article["published"], label, score))
+            new_count += 1
+            print(f"[{label:8}] {article['title']}")
+        except sqlite3.IntegrityError:
+            pass
+
+    conn.commit()
+    conn.close()
+    print(f"\nStored {new_count} new articles in news.db")
+
+if __name__ == "__main__":
+    analyze_and_store()
